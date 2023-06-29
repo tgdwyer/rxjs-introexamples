@@ -1,5 +1,5 @@
 import { of, range, fromEvent, merge, zip } from 'rxjs'; 
-import { last,filter,scan,map,mergeMap,take } from 'rxjs/operators';
+import { last,filter,scan,map,mergeMap,take, takeUntil } from 'rxjs/operators';
 
 console.log("Observable of parameters:")
 
@@ -60,3 +60,29 @@ const
 merge(key$.pipe(map(e=>e.key)),
       mouse$.pipe(map(_=>"Mouse Click!"))
 ).subscribe(console.log)
+
+  const svg = document.getElementById("svgCanvas")!;
+  const rect = document.getElementById("draggableRect")!;
+
+  const mousedown = fromEvent<MouseEvent>(rect,'mousedown'),
+        mousemove = fromEvent<MouseEvent>(svg,'mousemove'),
+        mouseup = fromEvent<MouseEvent>(svg,'mouseup');
+
+  mousedown
+    .pipe(
+      map(({clientX, clientY}) => ({
+        mouseDownXOffset: Number(rect.getAttribute('x')) - clientX,
+        mouseDownYOffset: Number(rect.getAttribute('y')) - clientY
+      })),
+      mergeMap(({mouseDownXOffset, mouseDownYOffset}) =>
+        mousemove
+          .pipe(
+            takeUntil(mouseup),
+            map(({clientX, clientY}) => ({
+                x: clientX + mouseDownXOffset,
+                y: clientY + mouseDownYOffset
+              })))))
+   .subscribe(({x, y}) => {
+     rect.setAttribute('x', String(x))
+     rect.setAttribute('y', String(y))
+   });
