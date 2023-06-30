@@ -1,4 +1,4 @@
-import { of, range, fromEvent, merge, zip } from 'rxjs'; 
+import { of, range, fromEvent, merge, zip, startWith } from 'rxjs'; 
 import { last,filter,scan,map,mergeMap,take, takeUntil } from 'rxjs/operators';
 
 console.log("Observable of parameters:")
@@ -48,19 +48,25 @@ const
   key$ = fromEvent<KeyboardEvent>(document,"keydown"),
   mouse$ = fromEvent<MouseEvent>(document,"mousedown");
 
-// key$.pipe(
-//   map(e=>e.key)
-// ).subscribe(console.log)
+key$.pipe(
+  map(e=>e.key)
+).subscribe(console.log)
 
 
-// mouse$.pipe(
-//   map(_=>"Mouse Click!")
-// ).subscribe(console.log)
+mouse$.pipe(
+  map(_=>"Mouse Click!")
+).subscribe(console.log)
 
 merge(key$.pipe(map(e=>e.key)),
       mouse$.pipe(map(_=>"Mouse Click!"))
 ).subscribe(console.log)
 
+/**
+ * Add a drag and drop behaviour to an SVG rectangle.
+ * Warning, reading the DOM in the function passed to the first
+ * map makes it impure!  See dragrect2 below for the solution.
+ */
+function dragrect1() {
   const svg = document.getElementById("svgCanvas")!;
   const rect = document.getElementById("draggableRect")!;
 
@@ -86,3 +92,59 @@ merge(key$.pipe(map(e=>e.key)),
      rect.setAttribute('x', String(x))
      rect.setAttribute('y', String(y))
    });
+}
+
+/**
+ * Tidy up the stream logic such that all state is managed
+ * by a pure function passed to scan
+ */
+function dragrect2() {
+  interface Point { readonly x:number, readonly y:number }
+  abstract class MousePosEvent implements Point { 
+    readonly x:number; readonly y:number;
+    constructor(e:MouseEvent) {
+      [this.x,this.y] = [e.clientX, e.clientY]
+    } 
+  }
+  class DownEvent extends MousePosEvent {}
+  class DragEvent extends MousePosEvent {}
+  type State = Readonly<{
+    rect:Point,
+    downrect:Point,
+    downpos:Point
+  }>
+  const svg = document.getElementById("svgCanvas")!;
+  const rect = document.getElementById("draggableRect")!;
+
+  const mousedown = fromEvent<MouseEvent>(rect,'mousedown'),
+        mousemove = fromEvent<MouseEvent>(svg,'mousemove'),
+        mouseup = fromEvent<MouseEvent>(svg,'mouseup');
+  const initRectPos:Point = {
+    x:Number(rect.getAttribute('x')),
+    y:Number(rect.getAttribute('y'))
+  }
+
+  mousedown
+    .pipe(
+      mergeMap(mouseDownEvent =>
+        mousemove.pipe(
+          takeUntil(mouseup),
+          map(mouseDragEvent=>new DragEvent(mouseDragEvent)),
+          startWith(new DownEvent(mouseDownEvent)))),
+      scan((a:State,e:MousePosEvent)=> 
+        e instanceof DownEvent
+        ? {...a,
+            downrect:a.rect,
+            downpos:{x:e.x,y:e.y} }
+        : {...a,
+            rect:{
+              x:e.x + a.downrect.x - a.downpos.x,
+              y:e.y + a.downrect.y - a.downpos.y} }
+      ,<State>{ rect:initRectPos })
+    )
+   .subscribe(e => {
+     rect.setAttribute('x', String(e.rect.x))
+     rect.setAttribute('y', String(e.rect.y))
+   });
+}
+dragrect2()
