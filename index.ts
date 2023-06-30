@@ -96,7 +96,7 @@ function dragrect1() {
 
 /**
  * Tidy up the stream logic such that all state is managed
- * by a pure function passed to scan
+ * by a pure function passed to scan.
  */
 function dragrect2() {
   interface Point { readonly x:number, readonly y:number }
